@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ASDF_INSTALL_TYPE=${ASDF_INSTALL_TYPE:-version}
+TMPDIR=${TMPDIR:-/tmp}
+[ -n "$ASDF_INSTALL_VERSION" ] || (>&2 echo 'Missing ASDF_INSTALL_VERSION' && exit 1)
+[ -n "$ASDF_INSTALL_PATH" ] || (>&2 echo 'Missing ASDF_INSTALL_PATH' && exit 1)
+[ -n "$ASDF_DOWNLOAD_PATH" ] || (>&2 echo 'Missing ASDF_DOWNLOAD_PATH' && exit 1)
+
+download_kubefwd() {
+  local download_path=$ASDF_DOWNLOAD_PATH
+  local download_url="$(get_download_url $ASDF_INSTALL_VERSION)"
+
+  mkdir -p "${ASDF_DOWNLOAD_PATH}"
+
+  echo "Downloading kubefwd from ${download_url}"
+  curl -s -L "$download_url" -o "${ASDF_DOWNLOAD_PATH}/kubefwd.tar.gz"
+  tar -xzf "${ASDF_DOWNLOAD_PATH}/kubefwd.tar.gz" -C "${ASDF_DOWNLOAD_PATH}"
+  rm "${ASDF_DOWNLOAD_PATH}/kubefwd.tar.gz"
+}
+
+install_kubefwd() {
+  local bin_install_path="$ASDF_INSTALL_PATH/bin"
+
+  (
+    mkdir -p "${bin_install_path}"
+    cp -r $ASDF_DOWNLOAD_PATH/* ${bin_install_path}
+    chmod +x "${bin_install_path}/kubefwd"
+
+  ) || (
+		rm -rf "$bin_install_path"
+		echo "An error occurred while installing kubefwd $ASDF_INSTALL_VERSION."
+    return 1
+	)
+}
+
+get_platform() {
+  uname | tr '[:upper:]' '[:lower:]'
+}
+
+get_arch() {
+  case "$(get_platform)" in
+    darwin)
+      case "$(uname -m)" in
+        x86_64 | amd64) echo "x86_64";;
+        aarch64 | arm64) echo "arm64";;
+      esac
+      ;;
+    linux)
+      case "$(uname -m)" in
+        x86_64 | amd64) echo "x86_64" ;;
+        aarch64 | arm64) echo "arm64";;
+      esac
+      ;;
+    windows)
+      case "$(uname -m)" in
+        x86_64 | amd64) echo "x86_64" ;;
+        aarch64 | arm64) echo "armv6";;
+      esac
+      ;;
+  esac
+}
+
+get_download_url() {
+  local version="$1"
+  local platform="$(get_platform)"
+  local arch="$(get_arch)"
+  echo "https://github.com/txn2/kubefwd/releases/download/${version}/kubefwd_${platform}_${arch}.tar.gz"
+}
+
+download_kubefwd
+install_kubefwd
